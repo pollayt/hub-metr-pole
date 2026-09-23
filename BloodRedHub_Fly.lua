@@ -790,6 +790,108 @@ DashTab:Paragraph({
 	Image="gauge"
 })
 
+local Noclip={
+	On=false,
+	Connections={},
+	Parts={}
+}
+
+local function saveNoclipPart(part)
+	if not part or not part:IsA("BasePart") then return end
+	if Noclip.Parts[part]==nil then
+		Noclip.Parts[part]=part.CanCollide
+	end
+	part.CanCollide=false
+end
+
+local function applyNoclip()
+	local char=LP.Character
+	if not char then return end
+
+	for _,obj in ipairs(char:GetDescendants()) do
+		if obj:IsA("BasePart") then
+			saveNoclipPart(obj)
+		end
+	end
+end
+
+local function stopNoclip()
+	Noclip.On=false
+
+	for _,connection in ipairs(Noclip.Connections) do
+		if connection then connection:Disconnect() end
+	end
+	Noclip.Connections={}
+
+	for part,oldValue in pairs(Noclip.Parts) do
+		if part and part.Parent then
+			part.CanCollide=oldValue
+		end
+	end
+
+	Noclip.Parts={}
+end
+
+local function startNoclip()
+	if Noclip.On then return end
+
+	Noclip.On=true
+	applyNoclip()
+
+	if LP.Character then
+		table.insert(Noclip.Connections,LP.Character.DescendantAdded:Connect(function(obj)
+			if Noclip.On and obj:IsA("BasePart") then
+				saveNoclipPart(obj)
+			end
+		end))
+	end
+
+	table.insert(Noclip.Connections,LP.CharacterAdded:Connect(function(char)
+		task.wait(.15)
+		if not Noclip.On then return end
+
+		for _,obj in ipairs(char:GetDescendants()) do
+			if obj:IsA("BasePart") then
+				saveNoclipPart(obj)
+			end
+		end
+
+		table.insert(Noclip.Connections,char.DescendantAdded:Connect(function(obj)
+			if Noclip.On and obj:IsA("BasePart") then
+				saveNoclipPart(obj)
+			end
+		end))
+	end))
+
+	table.insert(Noclip.Connections,RunService.Heartbeat:Connect(function()
+		if Noclip.On then
+			applyNoclip()
+		end
+	end))
+end
+
+DashTab:Toggle({
+	Title="ativar noclip",
+	Desc="atravessa paredes e objetos sem colisao",
+	Flag="NoclipEnabled",
+	Value=false,
+	Callback=function(v)
+		if v then
+			startNoclip()
+			notify("noclip","ativado","move")
+		else
+			stopNoclip()
+			notify("noclip","desativado","x")
+		end
+	end
+})
+
+DashTab:Paragraph({
+	Title="noclip",
+	Desc="permite atravessar paredes e objetos enquanto estiver ativado.",
+	Image="ghost"
+})
+
 local ConfigManager=Window.ConfigManager
 local configName="default"
 local configFile=nil
