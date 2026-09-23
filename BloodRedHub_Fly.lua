@@ -165,7 +165,6 @@ local HitboxTab=Window:Tab({Title="hitbox",Icon="target"})
 local ESPTab=Window:Tab({Title="esp",Icon="eye"})
 local RevistarTab=Window:Tab({Title="revistar",Icon="search"})
 local DashTab=Window:Tab({Title="dash",Icon="zap"})
-local FlyTab=Window:Tab({Title="fly",Icon="plane"})
 local ConfigTab=Window:Tab({Title="config",Icon="settings"})
 
 local function notify(t,c,i)
@@ -754,7 +753,7 @@ local function startFly()
 	end)
 end
 
-FlyTab:Toggle({
+DashTab:Toggle({
 	Title="ativar fly",
 	Desc="ativa os controles de voo no celular",
 	Flag="FlyEnabled",
@@ -770,7 +769,7 @@ FlyTab:Toggle({
 	end
 })
 
-FlyTab:Slider({
+DashTab:Slider({
 	Title="velocidade",
 	Desc="aumenta ou diminui a velocidade do fly",
 	Flag="FlySpeed",
@@ -779,13 +778,13 @@ FlyTab:Slider({
 	Callback=function(v) Fly.Speed=v end
 })
 
-FlyTab:Paragraph({
+DashTab:Paragraph({
 	Title="controles mobile",
 	Desc="▲ frente | ◀ esquerda | ▼ tras | ▶ direita | ⬆ subir | ⬇ descer",
 	Image="smartphone"
 })
 
-FlyTab:Paragraph({
+DashTab:Paragraph({
 	Title="velocidade",
 	Desc="use o controle acima para aumentar ou diminuir a velocidade do voo.",
 	Image="gauge"
