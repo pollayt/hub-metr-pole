@@ -1368,7 +1368,49 @@ local function getObjectPosition(obj)
     return nil
 end
 
-local function findDeliveryTarget(previousPosition)
+local function snapshotNPCs()
+    local set={}
+    for _,obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj:FindFirstChildOfClass("Humanoid") and obj:FindFirstChild("HumanoidRootPart") then
+            set[obj]=true
+        end
+    end
+    return set
+end
+
+local function getNPCPosition(obj)
+    if not obj or not obj.Parent then return nil end
+    local root=obj:FindFirstChild("HumanoidRootPart")
+    local hum=obj:FindFirstChildOfClass("Humanoid")
+    if root and hum and hum.Health>0 then return root.Position end
+    return nil
+end
+
+local function findNewDeliveryNPC(beforeNPCs, previousPosition)
+    local candidates={}
+
+    for _,obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and not beforeNPCs[obj] then
+            local pos=getNPCPosition(obj)
+            if pos then
+                local d=(pos-previousPosition).Magnitude
+                if d>15 then
+                    table.insert(candidates,{obj=obj,pos=pos,score=1000-d/100})
+                end
+            end
+        end
+    end
+
+    table.sort(candidates,function(a,b) return a.score>b.score end)
+    return candidates[1] and candidates[1].obj or nil
+end
+
+local function findDeliveryTarget(previousPosition, beforeNPCs)
+    -- Primeiro procura o NPC que acabou de nascer quando a entrega foi aceita.
+    local npc=findNewDeliveryNPC(beforeNPCs or {},previousPosition)
+    if npc then return getNPCPosition(npc),npc end
+
+    -- Fallback para marcadores/destinos nomeados, caso o jogo não use NPC.
     local candidates={}
     for _,obj in ipairs(workspace:GetDescendants()) do
         if (obj:IsA("BasePart") or obj:IsA("Attachment") or obj:IsA("Model")) and nameLooksLikeDelivery(obj.Name) then
@@ -1379,23 +1421,8 @@ local function findDeliveryTarget(previousPosition)
             end
         end
     end
-
-    -- procura marcadores/waypoints que tenham sido criados após pegar o pedido
-    for _,obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") or obj:IsA("Attachment") then
-            local gui=obj:FindFirstChildWhichIsA("BillboardGui",true)
-            local h=obj:FindFirstChildWhichIsA("Highlight",true)
-            if gui or h then
-                local pos=getObjectPosition(obj)
-                if pos then
-                    local d=(pos-previousPosition).Magnitude
-                    if d>80 then table.insert(candidates,{pos=pos,score=300-d/1000}) end
-                end
-            end
-        end
-    end
     table.sort(candidates,function(x,y) return x.score>y.score end)
-    return candidates[1] and candidates[1].pos or nil
+    return candidates[1] and candidates[1].pos or nil,nil
 end
 
 local function keyEvent(down)
@@ -1459,36 +1486,41 @@ local function startAutoEntrega()
 
     AutoEntrega.Thread=task.spawn(function()
         while AutoEntrega.On do
-            -- 1) TP direto para o ponto de pegar a entrega e segura E por mais tempo
+            -- 1) registra os NPCs existentes antes de aceitar a entrega.
+            -- Assim conseguimos identificar o NPC novo que o jogo criar depois do E.
+            local beforeNPCs=snapshotNPCs()
+
+            -- 2) TP direto para o ponto de pegar a entrega e segura E por mais tempo
             if not teleportTo(AutoEntrega.Pickup) then break end
             holdE(6)
             if not AutoEntrega.On then break end
 
-            -- 2) espera o jogo criar/atualizar o destino variável
+            -- 3) espera o NPC da entrega nascer/aparecer.
             local target=nil
-            for _=1,20 do
-                target=findDeliveryTarget(AutoEntrega.Pickup)
+            local deliveryNPC=nil
+            for _=1,30 do
+                target,deliveryNPC=findDeliveryTarget(AutoEntrega.Pickup,beforeNPCs)
                 if target then break end
                 task.wait(.5)
             end
 
             if not target then
-                stopAutoEntrega("não consegui detectar o destino desta entrega")
+                stopAutoEntrega("pegou o pedido, mas não encontrei o NPC novo da entrega")
                 break
             end
 
             AutoEntrega.Target=target
-            notify("auto entregador","destino detectado, teleportando...","map-pin")
+            notify("auto entregador","NPC da entrega detectado, indo entregar...","map-pin")
 
-            -- 3) TP direto para o destino, sem usar carro
+            -- 4) TP para o NPC que acabou de nascer.
             if not teleportTo(target) then break end
-            task.wait(.5)
+            task.wait(.7)
 
-            -- 4) segura E até completar a interação
+            -- 5) segura E para concluir a entrega.
             tryCompleteDelivery(target)
             task.wait(2)
 
-            -- 5) próxima entrega
+            -- 6) próxima entrega
             AutoEntrega.Target=nil
             notify("auto entregador","entrega processada, pegando próxima...","check")
             task.wait(.7)
@@ -1501,7 +1533,7 @@ end
 
 ESPCarTab:Toggle({
     Title="auto entregador",
-    Desc="TP somente para pegar a entrega, segura E por mais tempo e detecta o destino automaticamente",
+    Desc="pega a entrega, espera o NPC nascer e vai até ele para entregar",
     Flag="AutoEntrega",
     Value=false,
     Callback=function(v)
@@ -1511,7 +1543,7 @@ ESPCarTab:Toggle({
 
 ESPCarTab:Paragraph({
     Title="auto entregador",
-    Desc="não vai mais ao local de missão: TP direto no ponto da entrega, segura E por 6 segundos e depois tenta localizar o destino variável do pedido.",
+    Desc="TP direto no ponto da entrega, segura E por 6 segundos, detecta o NPC novo que nasce após aceitar e vai até ele.",
     Image="map-pin"
 })
 
