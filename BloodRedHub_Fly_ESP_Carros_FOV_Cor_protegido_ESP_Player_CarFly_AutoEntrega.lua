@@ -1344,7 +1344,8 @@ end
 local function teleportTo(pos)
     local root=getPlayerRoot()
     if not root then return false end
-    root.CFrame=CFrame.new(pos+Vector3.new(0,2.5,0))
+    local y=root.Position.Y
+    root.CFrame=CFrame.new(pos.X,y,pos.Z)
     task.wait(.35)
     return true
 end
@@ -1376,21 +1377,10 @@ local function findDeliveryTarget(previousPosition)
             local pos=getObjectPosition(obj)
             if pos then
                 local d=(pos-previousPosition).Magnitude
-                if d>25 then table.insert(candidates,{pos=pos,score=1000-d/100}) end
-            end
-        end
-    end
-
-    -- procura marcadores/waypoints que tenham sido criados após pegar o pedido
-    for _,obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("BasePart") or obj:IsA("Attachment") then
-            local gui=obj:FindFirstChildWhichIsA("BillboardGui",true)
-            local h=obj:FindFirstChildWhichIsA("Highlight",true)
-            if gui or h then
-                local pos=getObjectPosition(obj)
-                if pos then
-                    local d=(pos-previousPosition).Magnitude
-                    if d>80 then table.insert(candidates,{pos=pos,score=300-d/1000}) end
+                local root=getPlayerRoot()
+                local current=root and root.Position or previousPosition
+                if d>25 and math.abs(pos.Y-current.Y)<80 then
+                    table.insert(candidates,{pos=pos,score=1000-d/100})
                 end
             end
         end
@@ -1470,19 +1460,7 @@ local function holdE(seconds)
 end
 
 local function tryCompleteDelivery(target)
-    -- primeiro tenta a tecla E, como o jogador faria manualmente
-    holdE(2.5)
-
-    -- fallback: se existir ProximityPrompt exatamente no destino, ativa também
-    for _,obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") then
-            local pos=getObjectPosition(obj.Parent)
-            if pos and (pos-target).Magnitude<12 then
-                pcall(function() fireproximityprompt(obj) end)
-                return true
-            end
-        end
-    end
+    holdE(3)
     return true
 end
 
