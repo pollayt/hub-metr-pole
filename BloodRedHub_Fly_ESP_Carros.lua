@@ -37,7 +37,7 @@ local Aim={
 }
 
 local Window=WindUI:CreateWindow({
-	Title="Github 🐙",
+	Title="Github",
 	Icon="github",
 	Folder="BloodRedHub",
 	Theme="Dark",
@@ -173,6 +173,7 @@ WindUI:SetTheme("blood red")
 local MainTab=Window:Tab({Title="aimbot",Icon="crosshair"})
 local HitboxTab=Window:Tab({Title="hitbox",Icon="target"})
 local ESPTab=Window:Tab({Title="esp",Icon="eye"})
+local ESPCarTab=Window:Tab({Title="esp car",Icon="car"})
 local RevistarTab=Window:Tab({Title="revistar",Icon="search"})
 local DashTab=Window:Tab({Title="dash",Icon="zap"})
 local ConfigTab=Window:Tab({Title="config",Icon="settings"})
@@ -897,6 +898,7 @@ DashTab:Paragraph({
 })
 
 local AimCircle=nil
+local AimFOVGui=nil
 local AimConnection=nil
 
 local function getAimPart(character)
@@ -964,6 +966,10 @@ local function destroyAimCircle()
 		AimCircle:Destroy()
 		AimCircle=nil
 	end
+	if AimFOVGui then
+		AimFOVGui:Destroy()
+		AimFOVGui=nil
+	end
 end
 
 local function updateAimCircle()
@@ -973,6 +979,14 @@ local function updateAimCircle()
 	end
 
 	if not AimCircle then
+		AimFOVGui=Instance.new("ScreenGui")
+		AimFOVGui.Name="BloodRedAimbotFOVGui"
+		AimFOVGui.ResetOnSpawn=false
+		AimFOVGui.IgnoreGuiInset=true
+		AimFOVGui.DisplayOrder=999999
+		AimFOVGui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+		AimFOVGui.Parent=ParentGui
+
 		AimCircle=Instance.new("Frame")
 		AimCircle.Name="BloodRedAimbotFOV"
 		AimCircle.AnchorPoint=Vector2.new(.5,.5)
@@ -980,7 +994,7 @@ local function updateAimCircle()
 		AimCircle.BackgroundTransparency=1
 		AimCircle.BorderSizePixel=0
 		AimCircle.ZIndex=200
-		AimCircle.Parent=ParentGui
+		AimCircle.Parent=AimFOVGui
 
 		local corner=Instance.new("UICorner")
 		corner.CornerRadius=UDim.new(1,0)
@@ -1170,7 +1184,7 @@ local function stopVehicleESP()
 	clearVehicleESP()
 end
 
-ESPTab:Toggle({
+ESPCarTab:Toggle({
 	Title="esp carros",
 	Desc="destaca os carros e veiculos do servidor",
 	Flag="VehicleESP",
@@ -1186,10 +1200,9 @@ ESPTab:Toggle({
 	end
 })
 
-ESPTab:Paragraph({
+ESPCarTab:Paragraph({
 	Title="esp carros",
 	Desc="mostra os veiculos encontrados no mapa.",
-	Image="car"
 })
 
 local ConfigManager=Window.ConfigManager
