@@ -1326,68 +1326,32 @@ ESPCarTab:Slider({Title="velocidade vertical",Desc="velocidade para subir e desc
 ESPCarTab:Paragraph({Title="controles do fly carro",Desc="▲ frente | ◀ esquerda | ▼ tras | ▶ direita | ⬆ subir | ⬇ descer. entre em um carro antes de ativar.",Image="smartphone"})
 
 
--- AUTO ENTREGADOR
--- pontos informados pelo usuario
+-- AUTO ENTREGADOR (TP + segurar E)
 local AutoEntrega={
     On=false,
     Mission=Vector3.new(1768.63,488.38,-9788.06),
     Pickup=Vector3.new(1770.40,488.38,-9794.47),
-    Speed=90,
-    ArrivalDistance=10,
+    ArrivalDistance=5,
     Target=nil,
-    LastTarget=nil,
     Thread=nil
 }
 
-local function distanceTo(pos)
+local function getPlayerRoot()
     local char=LP.Character
-    local root=char and char:FindFirstChild("HumanoidRootPart")
-    return root and (root.Position-pos).Magnitude or math.huge
+    return char and char:FindFirstChild("HumanoidRootPart")
 end
 
-local function moveCarTo(pos, timeout)
-    timeout=timeout or 45
-    local started=os.clock()
-    while AutoEntrega.On and os.clock()-started<timeout do
-        local seat=getCarSeat()
-        local root=getCarRoot(seat)
-        if not seat or not root then
-            notify("auto entregador","entre no carro/moto antes de iniciar","x")
-            return false
-        end
-
-        local delta=pos-root.Position
-        local dist=delta.Magnitude
-        if dist<=AutoEntrega.ArrivalDistance then
-            if CarFly.Velocity then CarFly.Velocity.Velocity=Vector3.zero end
-            return true
-        end
-
-        if not CarFly.Velocity or CarFly.Velocity.Parent~=root then
-            if CarFly.Velocity then CarFly.Velocity:Destroy() end
-            CarFly.Velocity=Instance.new("BodyVelocity")
-            CarFly.Velocity.Name="BloodRedAutoEntregaVelocity"
-            CarFly.Velocity.MaxForce=Vector3.new(math.huge,math.huge,math.huge)
-            CarFly.Velocity.P=90000
-            CarFly.Velocity.Parent=root
-        end
-
-        local dir=delta.Unit
-        local speed=math.clamp(AutoEntrega.Speed,20,250)
-        CarFly.Velocity.Velocity=dir*speed
-        RunService.Heartbeat:Wait()
-    end
-    return false
+local function teleportTo(pos)
+    local root=getPlayerRoot()
+    if not root then return false end
+    root.CFrame=CFrame.new(pos+Vector3.new(0,2.5,0))
+    task.wait(.35)
+    return true
 end
 
 local function nameLooksLikeDelivery(name)
     local n=tostring(name):lower()
-    local words={
-        "delivery","deliver","entrega","destino","destination",
-        "waypoint","way point","target","objective","objetivo",
-        "pedido","cliente","dropoff","drop_off","deliverypoint",
-        "deliverypoint","destin"
-    }
+    local words={"delivery","deliver","entrega","destino","destination","waypoint","way point","target","objective","objetivo","pedido","cliente","dropoff","drop_off","deliverypoint","destin"}
     for _,w in ipairs(words) do
         if n:find(w,1,true) then return true end
     end
@@ -1407,93 +1371,109 @@ end
 
 local function findDeliveryTarget(previousPosition)
     local candidates={}
-
-    -- primeiro: objetos com nomes que normalmente representam waypoint/destino
     for _,obj in ipairs(workspace:GetDescendants()) do
         if (obj:IsA("BasePart") or obj:IsA("Attachment") or obj:IsA("Model")) and nameLooksLikeDelivery(obj.Name) then
             local pos=getObjectPosition(obj)
             if pos then
-                local d=previousPosition and (pos-previousPosition).Magnitude or 0
-                if d>20 then
-                    table.insert(candidates,{obj=obj,pos=pos,score=1000-d/100})
-                end
+                local d=(pos-previousPosition).Magnitude
+                if d>25 then table.insert(candidates,{pos=pos,score=1000-d/100}) end
             end
         end
     end
 
-    -- segundo: marcadores visuais adicionados pelo jogo recentemente
+    -- procura marcadores/waypoints que tenham sido criados após pegar o pedido
     for _,obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("BasePart") or obj:IsA("Attachment") then
-            local hasGui=obj:FindFirstChildWhichIsA("BillboardGui",true) or obj:FindFirstChildWhichIsA("SurfaceGui",true)
-            local hasHighlight=obj:FindFirstChildWhichIsA("Highlight",true)
-            if hasGui or hasHighlight then
+            local gui=obj:FindFirstChildWhichIsA("BillboardGui",true)
+            local h=obj:FindFirstChildWhichIsA("Highlight",true)
+            if gui or h then
                 local pos=getObjectPosition(obj)
                 if pos then
-                    local d=previousPosition and (pos-previousPosition).Magnitude or 0
-                    if d>50 then
-                        table.insert(candidates,{obj=obj,pos=pos,score=300-d/1000})
-                    end
+                    local d=(pos-previousPosition).Magnitude
+                    if d>80 then table.insert(candidates,{pos=pos,score=300-d/1000}) end
                 end
             end
         end
     end
-
-    table.sort(candidates,function(a,b) return a.score>b.score end)
+    table.sort(candidates,function(x,y) return x.score>y.score end)
     return candidates[1] and candidates[1].pos or nil
 end
 
+local function keyEvent(down)
+    local ok=false
+    pcall(function()
+        local vim=game:GetService("VirtualInputManager")
+        vim:SendKeyEvent(down,Enum.KeyCode.E,false,game)
+        ok=true
+    end)
+    if not ok then
+        pcall(function()
+            if keypress and keyrelease then
+                if down then keypress(0x45) else keyrelease(0x45) end
+                ok=true
+            end
+        end)
+    end
+    return ok
+end
+
+local function holdE(seconds)
+    seconds=seconds or 2.5
+    keyEvent(true)
+    local started=os.clock()
+    while AutoEntrega.On and os.clock()-started<seconds do
+        -- mantém E pressionado durante toda a interação
+        task.wait(.1)
+    end
+    keyEvent(false)
+    task.wait(.4)
+end
+
 local function tryCompleteDelivery(target)
-    -- procura prompts/interacoes perto do destino
-    local best=nil
-    local bestDist=math.huge
+    -- primeiro tenta a tecla E, como o jogador faria manualmente
+    holdE(2.5)
+
+    -- fallback: se existir ProximityPrompt exatamente no destino, ativa também
     for _,obj in ipairs(workspace:GetDescendants()) do
         if obj:IsA("ProximityPrompt") then
-            local parent=obj.Parent
-            local pos=parent and getObjectPosition(parent)
-            if pos and (pos-target).Magnitude<18 and (pos-target).Magnitude<bestDist then
-                best=obj;bestDist=(pos-target).Magnitude
+            local pos=getObjectPosition(obj.Parent)
+            if pos and (pos-target).Magnitude<12 then
+                pcall(function() fireproximityprompt(obj) end)
+                return true
             end
         end
     end
-    if best then
-        pcall(function() fireproximityprompt(best) end)
-        return true
-    end
-    return false
+    return true
 end
 
 local function stopAutoEntrega(msg)
     AutoEntrega.On=false
     AutoEntrega.Target=nil
-    if CarFly.Velocity then CarFly.Velocity.Velocity=Vector3.zero end
+    keyEvent(false)
     if msg then notify("auto entregador",msg,"info") end
 end
 
 local function startAutoEntrega()
     if AutoEntrega.On then return end
-    if not getCarSeat() then
-        notify("auto entregador","entre na moto/carro primeiro","x")
-        return
-    end
-
     AutoEntrega.On=true
-    notify("auto entregador","indo pegar a missão...","truck")
+    notify("auto entregador","indo pegar a missão...","map-pin")
 
     AutoEntrega.Thread=task.spawn(function()
         while AutoEntrega.On do
-            -- 1) vai até o NPC/local de pegar missão
-            if not moveCarTo(AutoEntrega.Mission,60) then break end
-            task.wait(1)
+            -- 1) TP para o local da missão e segura E
+            if not teleportTo(AutoEntrega.Mission) then break end
+            holdE(3)
+            if not AutoEntrega.On then break end
 
-            -- 2) vai até o ponto de pegar a entrega
-            if not moveCarTo(AutoEntrega.Pickup,30) then break end
-            task.wait(2)
+            -- 2) TP para o ponto de pegar a entrega e segura E
+            if not teleportTo(AutoEntrega.Pickup) then break end
+            holdE(3)
+            if not AutoEntrega.On then break end
 
-            -- 3) tenta descobrir o destino criado pelo jogo
-            local startPos=AutoEntrega.Pickup
+            -- 3) espera o jogo criar/atualizar o destino variável
             local target=nil
-            for _=1,10 do
-                target=findDeliveryTarget(startPos)
+            for _=1,20 do
+                target=findDeliveryTarget(AutoEntrega.Pickup)
                 if target then break end
                 task.wait(.5)
             end
@@ -1504,52 +1484,40 @@ local function startAutoEntrega()
             end
 
             AutoEntrega.Target=target
-            notify("auto entregador","destino detectado, indo entregar...","map-pin")
+            notify("auto entregador","destino detectado, teleportando...","map-pin")
 
-            -- 4) vai ao destino
-            if not moveCarTo(target,90) then break end
-            task.wait(1)
+            -- 4) TP direto para o destino, sem usar carro
+            if not teleportTo(target) then break end
+            task.wait(.5)
+
+            -- 5) segura E até completar a interação
             tryCompleteDelivery(target)
-            task.wait(3)
+            task.wait(2)
 
-            -- 5) próxima missão
+            -- 6) próxima entrega
             AutoEntrega.Target=nil
-            notify("auto entregador","entrega concluída, pegando próxima...","check")
+            notify("auto entregador","entrega processada, pegando próxima...","check")
+            task.wait(.7)
         end
-
-        if AutoEntrega.On then
-            AutoEntrega.On=false
-            AutoEntrega.Target=nil
-        end
+        keyEvent(false)
+        AutoEntrega.On=false
+        AutoEntrega.Target=nil
     end)
 end
 
 ESPCarTab:Toggle({
     Title="auto entregador",
-    Desc="pega a missão, vai ao ponto de entrega e tenta detectar o destino automaticamente",
+    Desc="TP para missão/entrega, segura E e detecta o destino automaticamente",
     Flag="AutoEntrega",
     Value=false,
     Callback=function(v)
-        if v then
-            startAutoEntrega()
-        else
-            stopAutoEntrega("desativado")
-        end
+        if v then startAutoEntrega() else stopAutoEntrega("desativado") end
     end
-})
-
-ESPCarTab:Slider({
-    Title="velocidade auto entregador",
-    Desc="velocidade usada para ir aos pontos",
-    Flag="AutoEntregaSpeed",
-    Step=5,
-    Value={Min=30,Max=250,Default=90},
-    Callback=function(v) AutoEntrega.Speed=v end
 })
 
 ESPCarTab:Paragraph({
     Title="auto entregador",
-    Desc="missão: 1768.63, 488.38, -9788.06 | entrega: 1770.40, 488.38, -9794.47 | depois tenta localizar automaticamente o destino do pedido.",
+    Desc="não usa veículo: TP na missão e no ponto de entrega, segura E e depois tenta localizar o destino variável do pedido.",
     Image="map-pin"
 })
 
