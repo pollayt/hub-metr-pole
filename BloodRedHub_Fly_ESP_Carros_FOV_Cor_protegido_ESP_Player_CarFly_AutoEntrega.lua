@@ -1337,8 +1337,11 @@ end
 local function teleportToPickup()
     local root=getPlayerRoot()
     if not root then return false end
-    root.CFrame=CFrame.new(AutoEntrega.Pickup)
-    task.wait(.5)
+    local pos=AutoEntrega.Pickup + Vector3.new(0,3,0)
+    root.AssemblyLinearVelocity=Vector3.zero
+    root.AssemblyAngularVelocity=Vector3.zero
+    root.CFrame=CFrame.new(pos)
+    task.wait(.6)
     return true
 end
 
@@ -1394,7 +1397,7 @@ end
 
 ESPCarTab:Toggle({
     Title="auto entregador",
-    Desc="TP para missão/entrega, segura E e detecta o destino automaticamente",
+    Desc="Vai direto ao ponto de pegar a entrega e segura E",
     Flag="AutoEntrega",
     Value=false,
     Callback=function(v)
@@ -1404,7 +1407,7 @@ ESPCarTab:Toggle({
 
 ESPCarTab:Paragraph({
     Title="auto entregador",
-    Desc="não usa veículo: TP na missão e no ponto de entrega, segura E e depois tenta localizar o destino variável do pedido.",
+    Desc="Somente pega a entrega: TP no ponto informado e segura E. Não vai para a missão nem para o destino.",
     Image="map-pin"
 })
 
