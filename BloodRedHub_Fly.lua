@@ -27,6 +27,15 @@ local Fly={
 	Down=false
 }
 
+local Aim={
+	On=false,
+	FOV=150,
+	IgnoreFriends=true,
+	IgnoreTeam=true,
+	Part="Head",
+	ShowFOV=true
+}
+
 local Window=WindUI:CreateWindow({
 	Title="Github 🐙",
 	Icon="github",
@@ -161,6 +170,7 @@ WindUI:AddTheme({
 })
 WindUI:SetTheme("blood red")
 
+local MainTab=Window:Tab({Title="principal",Icon="crosshair"})
 local HitboxTab=Window:Tab({Title="hitbox",Icon="target"})
 local ESPTab=Window:Tab({Title="esp",Icon="eye"})
 local RevistarTab=Window:Tab({Title="revistar",Icon="search"})
@@ -884,6 +894,196 @@ DashTab:Paragraph({
 	Title="controles mobile",
 	Desc="▲ frente | ◀ esquerda | ▼ tras | ▶ direita | ⬆ subir | ⬇ descer",
 	Image="smartphone"
+})
+
+local AimCircle=nil
+local AimConnection=nil
+
+local function getAimPart(character)
+	if not character then return nil end
+	local names={
+		Head={"Head"},
+		HumanoidRootPart={"HumanoidRootPart"},
+		UpperTorso={"UpperTorso","Torso"},
+		Torso={"Torso","UpperTorso"}
+	}
+	for _,name in ipairs(names[Aim.Part] or {Aim.Part}) do
+		local part=character:FindFirstChild(name)
+		if part and part:IsA("BasePart") then return part end
+	end
+	return character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
+end
+
+local function isFriend(p)
+	if not p or p==LP then return false end
+	local ok,result=pcall(function()
+		return LP:IsFriendsWith(p.UserId)
+	end)
+	return ok and result==true
+end
+
+local function validAimPlayer(p)
+	if not p or p==LP then return false end
+	if not p.Character then return false end
+	local hum=p.Character:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health<=0 then return false end
+	if Aim.IgnoreTeam and sameTeam(p) then return false end
+	if Aim.IgnoreFriends and isFriend(p) then return false end
+	return getAimPart(p.Character)~=nil
+end
+
+local function getAimTarget()
+	local camera=workspace.CurrentCamera
+	if not camera then return nil end
+
+	local mouse=UIS:GetMouseLocation()
+	local best=nil
+	local bestDistance=Aim.FOV
+
+	for _,p in ipairs(Players:GetPlayers()) do
+		if validAimPlayer(p) then
+			local part=getAimPart(p.Character)
+			local screen,onScreen=camera:WorldToViewportPoint(part.Position)
+			if onScreen and screen.Z>0 then
+				local d=(Vector2.new(screen.X,screen.Y)-mouse).Magnitude
+				if d<=bestDistance then
+					bestDistance=d
+					best=part
+				end
+			end
+		end
+	end
+
+	return best
+end
+
+local function destroyAimCircle()
+	if AimCircle then
+		pcall(function() AimCircle:Remove() end)
+		AimCircle=nil
+	end
+end
+
+local function updateAimCircle()
+	if not Aim.ShowFOV or not Aim.On then
+		destroyAimCircle()
+		return
+	end
+
+	if not AimCircle and Drawing then
+		local ok,circle=pcall(function() return Drawing.new("Circle") end)
+		if ok and circle then
+			AimCircle=circle
+			AimCircle.Thickness=2
+			AimCircle.NumSides=64
+			AimCircle.Filled=false
+			AimCircle.Color=Color3.fromRGB(255,30,30)
+			AimCircle.Transparency=.9
+		end
+	end
+
+	if AimCircle then
+		AimCircle.Radius=Aim.FOV
+		AimCircle.Position=UIS:GetMouseLocation()
+		AimCircle.Visible=true
+	end
+end
+
+local function stopAimbot()
+	Aim.On=false
+	if AimConnection then
+		AimConnection:Disconnect()
+		AimConnection=nil
+	end
+	destroyAimCircle()
+end
+
+local function startAimbot()
+	if Aim.On then return end
+	Aim.On=true
+
+	AimConnection=RunService.RenderStepped:Connect(function()
+		if not Aim.On then return end
+		updateAimCircle()
+
+		local target=getAimTarget()
+		local camera=workspace.CurrentCamera
+		if target and camera then
+			camera.CFrame=CFrame.lookAt(camera.CFrame.Position,target.Position)
+		end
+	end)
+end
+
+MainTab:Toggle({
+	Title="ativar aimbot",
+	Desc="mira automaticamente no jogador mais proximo dentro do FOV",
+	Flag="AimbotEnabled",
+	Value=false,
+	Callback=function(v)
+		if v then
+			startAimbot()
+			notify("aimbot","ativado","crosshair")
+		else
+			stopAimbot()
+			notify("aimbot","desativado","x")
+		end
+	end
+})
+
+MainTab:Slider({
+	Title="fov",
+	Desc="aumenta ou diminui a area de mira",
+	Flag="AimbotFOV",
+	Step=5,
+	Value={Min=25,Max=500,Default=150},
+	Callback=function(v)
+		Aim.FOV=v
+	end
+})
+
+MainTab:Toggle({
+	Title="ignorar amigos",
+	Desc="nao trava a mira em jogadores da sua lista de amigos",
+	Flag="AimbotIgnoreFriends",
+	Value=true,
+	Callback=function(v) Aim.IgnoreFriends=v end
+})
+
+MainTab:Toggle({
+	Title="ignorar time",
+	Desc="nao trava a mira em jogadores do mesmo time",
+	Flag="AimbotIgnoreTeam",
+	Value=true,
+	Callback=function(v) Aim.IgnoreTeam=v end
+})
+
+MainTab:Toggle({
+	Title="mostrar fov",
+	Desc="mostra o circulo do FOV na tela",
+	Flag="AimbotShowFOV",
+	Value=true,
+	Callback=function(v)
+		Aim.ShowFOV=v
+		if not v then destroyAimCircle() end
+	end
+})
+
+MainTab:Dropdown({
+	Title="parte do aimbot",
+	Desc="escolha onde a mira vai grudar",
+	Flag="AimbotPart",
+	Values={"Head","HumanoidRootPart","UpperTorso","Torso"},
+	Value="Head",
+	AllowNone=false,
+	Callback=function(v)
+		if v and v~="" then Aim.Part=v end
+	end
+})
+
+MainTab:Paragraph({
+	Title="aimbot",
+	Desc="o alvo e escolhido pela distancia do cursor ao centro da parte selecionada dentro do FOV.",
+	Image="crosshair"
 })
 
 local ConfigManager=Window.ConfigManager
