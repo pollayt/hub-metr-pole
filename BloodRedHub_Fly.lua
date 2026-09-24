@@ -170,7 +170,7 @@ WindUI:AddTheme({
 })
 WindUI:SetTheme("blood red")
 
-local MainTab=Window:Tab({Title="principal",Icon="crosshair"})
+local MainTab=Window:Tab({Title="aimbot",Icon="crosshair"})
 local HitboxTab=Window:Tab({Title="hitbox",Icon="target"})
 local ESPTab=Window:Tab({Title="esp",Icon="eye"})
 local RevistarTab=Window:Tab({Title="revistar",Icon="search"})
@@ -936,7 +936,7 @@ local function getAimTarget()
 	local camera=workspace.CurrentCamera
 	if not camera then return nil end
 
-	local mouse=UIS:GetMouseLocation()
+	local mouse=camera.ViewportSize/2
 	local best=nil
 	local bestDistance=Aim.FOV
 
@@ -957,9 +957,11 @@ local function getAimTarget()
 	return best
 end
 
+local AimCircle=nil
+
 local function destroyAimCircle()
 	if AimCircle then
-		pcall(function() AimCircle:Remove() end)
+		AimCircle:Destroy()
 		AimCircle=nil
 	end
 end
@@ -970,23 +972,31 @@ local function updateAimCircle()
 		return
 	end
 
-	if not AimCircle and Drawing then
-		local ok,circle=pcall(function() return Drawing.new("Circle") end)
-		if ok and circle then
-			AimCircle=circle
-			AimCircle.Thickness=2
-			AimCircle.NumSides=64
-			AimCircle.Filled=false
-			AimCircle.Color=Color3.fromRGB(255,30,30)
-			AimCircle.Transparency=.9
-		end
+	if not AimCircle then
+		AimCircle=Instance.new("Frame")
+		AimCircle.Name="BloodRedAimbotFOV"
+		AimCircle.AnchorPoint=Vector2.new(.5,.5)
+		AimCircle.Position=UDim2.new(.5,0,.5,0)
+		AimCircle.BackgroundTransparency=1
+		AimCircle.BorderSizePixel=0
+		AimCircle.ZIndex=200
+		AimCircle.Parent=ParentGui
+
+		local corner=Instance.new("UICorner")
+		corner.CornerRadius=UDim.new(1,0)
+		corner.Parent=AimCircle
+
+		local stroke=Instance.new("UIStroke")
+		stroke.Name="FOVStroke"
+		stroke.Color=Color3.fromRGB(255,30,30)
+		stroke.Thickness=1
+		stroke.Transparency=0
+		stroke.Parent=AimCircle
 	end
 
-	if AimCircle then
-		AimCircle.Radius=Aim.FOV
-		AimCircle.Position=UIS:GetMouseLocation()
-		AimCircle.Visible=true
-	end
+	local diameter=math.max(2,Aim.FOV*2)
+	AimCircle.Size=UDim2.fromOffset(diameter,diameter)
+	AimCircle.Visible=true
 end
 
 local function stopAimbot()
@@ -1038,6 +1048,7 @@ MainTab:Slider({
 	Value={Min=25,Max=500,Default=150},
 	Callback=function(v)
 		Aim.FOV=v
+		updateAimCircle()
 	end
 })
 
