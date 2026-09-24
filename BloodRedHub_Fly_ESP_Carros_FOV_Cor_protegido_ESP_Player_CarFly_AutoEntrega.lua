@@ -1344,9 +1344,11 @@ end
 local function teleportTo(pos)
     local root=getPlayerRoot()
     if not root then return false end
-    local y=root.Position.Y
+    -- O mapa da entrega fica na mesma altura da missão.
+    -- Nunca usa o Y do marcador, pois alguns marcadores ficam enterrados.
+    local y=AutoEntrega.Mission.Y+3
     root.CFrame=CFrame.new(pos.X,y,pos.Z)
-    task.wait(.35)
+    task.wait(.45)
     return true
 end
 
@@ -1379,8 +1381,10 @@ local function findDeliveryTarget(previousPosition)
                 local d=(pos-previousPosition).Magnitude
                 local root=getPlayerRoot()
                 local current=root and root.Position or previousPosition
-                if d>25 and math.abs(pos.Y-current.Y)<80 then
-                    table.insert(candidates,{pos=pos,score=1000-d/100})
+                -- Aceita somente marcadores próximos do nivel da rua;
+                -- evita pegar objetos/waypoints que ficam debaixo do mapa.
+                if d>25 and math.abs(pos.Y-AutoEntrega.Mission.Y)<12 then
+                    table.insert(candidates,{pos=Vector3.new(pos.X,AutoEntrega.Mission.Y+3,pos.Z),score=1000-d/100})
                 end
             end
         end
