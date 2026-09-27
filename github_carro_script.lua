@@ -610,3 +610,72 @@ ConfigTab:Button({
         end
     end
 })
+
+
+-- aba de temas
+local TemaTab = Window:Tab({
+    Title = "tema",
+    Icon = "palette"
+})
+
+local TemaAtual = "Dark"
+
+local ListaTemas = {
+    "Dark",
+    "Light",
+    "Aqua",
+    "Amethyst",
+    "Rose",
+    "Jester"
+}
+
+TemaTab:Dropdown({
+    Title = "selecionar tema da UI",
+    Values = ListaTemas,
+    Value = TemaAtual,
+    Callback = function(Value)
+        TemaAtual = Value
+        pcall(function()
+            WindUI:SetTheme(Value)
+        end)
+    end
+})
+
+TemaTab:Space()
+
+TemaTab:Button({
+    Title = "tema escuro",
+    Icon = "moon",
+    Callback = function()
+        TemaAtual = "Dark"
+        pcall(function()
+            WindUI:SetTheme("Dark")
+        end)
+    end
+})
+
+TemaTab:Space()
+
+TemaTab:Button({
+    Title = "tema claro",
+    Icon = "sun",
+    Callback = function()
+        TemaAtual = "Light"
+        pcall(function()
+            WindUI:SetTheme("Light")
+        end)
+    end
+})
+
+TemaTab:Space()
+
+TemaTab:Button({
+    Title = "resetar tema",
+    Icon = "refresh-cw",
+    Callback = function()
+        TemaAtual = "Dark"
+        pcall(function()
+            WindUI:SetTheme("Dark")
+        end)
+    end
+})
